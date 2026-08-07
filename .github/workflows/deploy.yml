@@ -20,7 +20,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build wiki
-        run: python mywiki/build.py
+        run: python build.py
+        working-directory: ./mywiki
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
