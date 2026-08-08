@@ -601,7 +601,7 @@ def build():
                 CATEGORIES.setdefault(c, []).append(name)
 
         mtime = datetime.fromtimestamp(os.path.getmtime(path), KST).strftime("%Y-%m-%d %H:%M")
-        actions = ('<a href="{{ROOT}}index.html">문서 목록</a>'
+        actions = ('<a href="{{ROOT}}all.html">문서 목록</a>'
                    '<a href="{{ROOT}}c/index.html">분류</a>')
         if repo:
             edit = "https://github.com/%s/edit/%s/%s/%s" % (repo, branch, DOCS_DIR, fn)
@@ -614,6 +614,12 @@ def build():
         with open(os.path.join(OUT_DIR, "w", slug(name) + ".html"), "w", encoding="utf-8") as f:
             f.write(htmlpage)
 
+        # 대문 문서는 사이트 루트에도 그대로 한 벌 더 출력한다
+        if name == CONFIG["front_page"]:
+            rootpage = page(name, body, "", "최근 수정 : " + mtime, actions, catbar)
+            with open(os.path.join(OUT_DIR, "index.html"), "w", encoding="utf-8") as f:
+                f.write(rootpage.replace("{{ROOT}}", ""))
+
         plain = re.sub(r"<[^>]+>", "", body)
         plain = re.sub(r"\s+", " ", html.unescape(plain)).strip()
         index.append({"t": name, "u": doc_url(name), "b": plain[:900]})
@@ -625,33 +631,27 @@ def build():
                       for m in sorted(members))
         b = '<ul class="doclist">%s</ul>' % lis
         p = page("분류: " + cat, b, "../", "%d개 문서" % len(members),
-                 '<a href="../index.html">문서 목록</a><a href="index.html">분류 목록</a>')
+                 '<a href="../all.html">문서 목록</a><a href="index.html">분류 목록</a>')
         with open(os.path.join(OUT_DIR, "c", slug(cat) + ".html"), "w", encoding="utf-8") as f:
             f.write(p.replace("{{ROOT}}", "../"))
 
     lis = "".join('<li><a href="%s.html">%s</a> <span style="color:var(--muted)">(%d)</span></li>'
                   % (enc(slug(c)), esc(c), len(m)) for c, m in sorted(CATEGORIES.items()))
     p = page("분류 목록", '<ul class="doclist">%s</ul>' % (lis or "<li>없음</li>"), "../",
-             "%d개 분류" % len(CATEGORIES), '<a href="../index.html">문서 목록</a>')
+             "%d개 분류" % len(CATEGORIES), '<a href="../all.html">문서 목록</a>')
     with open(os.path.join(OUT_DIR, "c", "index.html"), "w", encoding="utf-8") as f:
         f.write(p.replace("{{ROOT}}", "../"))
 
-    # 문서 목록
+    # 전체 문서 목록 (all.html)
     lis = "".join('<li><a href="%s">%s</a></li>' % (doc_url(n), esc(n)) for n in sorted(names))
     p = page("문서 목록", '<ul class="doclist">%s</ul>' % lis, "",
              "%d개 문서" % len(names), '<a href="c/index.html">분류 목록</a>')
-    with open(os.path.join(OUT_DIR, "index.html"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT_DIR, "all.html"), "w", encoding="utf-8") as f:
         f.write(p.replace("{{ROOT}}", ""))
 
-    # 대문 리다이렉트
-    fp = CONFIG["front_page"]
-    if fp in ALL_DOCS:
+    # 대문 문서가 없으면 루트를 문서 목록으로 대체
+    if CONFIG["front_page"] not in ALL_DOCS:
         with open(os.path.join(OUT_DIR, "index.html"), "w", encoding="utf-8") as f:
-            f.write('<!DOCTYPE html><meta charset="utf-8">'
-                    '<meta http-equiv="refresh" content="0;url=%s">' % doc_url(fp))
-        p = page("문서 목록", '<ul class="doclist">%s</ul>' % lis, "",
-                 "%d개 문서" % len(names), '<a href="c/index.html">분류 목록</a>')
-        with open(os.path.join(OUT_DIR, "all.html"), "w", encoding="utf-8") as f:
             f.write(p.replace("{{ROOT}}", ""))
 
     with open(os.path.join(OUT_DIR, "search.json"), "w", encoding="utf-8") as f:
