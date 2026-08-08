@@ -115,6 +115,14 @@ def inline(text, ctx):
                                        % (cls, doc_url(target), esc(label))))
                 continue
 
+        # 인라인 코드 `...`  (안쪽 문법은 그대로 보존)
+        if text[i] == "`":
+            j = text.find("`", i + 1)
+            if j != -1:
+                out.append(literal("<code>%s</code>" % esc(text[i + 1:j])))
+                i = j + 1
+                continue
+
         # 인라인 코드 {{{ ... }}}
         if text.startswith("{{{", i):
             j = text.find("}}}", i)
