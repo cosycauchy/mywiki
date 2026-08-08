@@ -37,12 +37,21 @@ def esc(s):
 
 
 def slug(name):
-    """문서 이름 -> 파일 경로용 문자열"""
-    return urllib.parse.quote(name.replace(" ", "_"), safe="")
+    """문서 이름 -> 디스크에 저장할 파일 이름 (한글 그대로, 공백만 _)"""
+    return name.replace(" ", "_").replace("/", "／")
+
+
+def enc(s):
+    """디스크 파일 이름 -> URL에 넣을 퍼센트 인코딩 문자열"""
+    return urllib.parse.quote(s, safe="")
 
 
 def doc_url(name):
-    return "w/" + slug(name) + ".html"
+    return "w/" + enc(slug(name)) + ".html"
+
+
+def cat_url(name):
+    return "c/" + enc(slug(name)) + ".html"
 
 
 # ─────────────────────────────────────────────────────────
@@ -171,6 +180,7 @@ def parse(src, ctx):
             first = line.strip()
             buf = []
             fold = re.match(r"^\{\{\{#!folding\s*(.*)$", first)
+            ibox = re.match(r"^\{\{\{#!infobox\s*(.*)$", first)
             lang = re.match(r"^\{\{\{#!(?:syntax|code)\s*(\w+)?\s*$", first)
             i += 1
             depth = 1
@@ -190,6 +200,30 @@ def parse(src, ctx):
                 title = fold.group(1).strip() or "펼치기 · 접기"
                 out.append('<details class="fold"><summary>%s</summary><div class="fold-body">%s</div></details>'
                            % (esc(title), parse(body, ctx)[0]))
+            elif ibox:
+                title = ibox.group(1).strip()
+                rows = []
+                for ln in body.split("\n"):
+                    ln = ln.strip()
+                    if not ln:
+                        continue
+                    if ln.startswith("||") and ln.endswith("||"):
+                        cells = ln.strip("|").split("||")
+                        if len(cells) >= 2:
+                            rows.append('<tr><th>%s</th><td>%s</td></tr>'
+                                        % (inline(cells[0].strip(), ctx),
+                                           inline("||".join(cells[1:]).strip(), ctx)))
+                        else:
+                            rows.append('<tr><td class="ib-full" colspan="2">%s</td></tr>'
+                                        % inline(cells[0].strip(), ctx))
+                    elif ln.startswith("---"):
+                        rows.append('<tr><td class="ib-sep" colspan="2"></td></tr>')
+                    else:
+                        rows.append('<tr><td class="ib-full" colspan="2">%s</td></tr>'
+                                    % inline(ln, ctx))
+                head = '<div class="ib-title">%s</div>' % inline(title, ctx) if title else ""
+                out.append('<aside class="ibox">%s<table>%s</table></aside>'
+                           % (head, "".join(rows)))
             else:
                 out.append('<pre class="code"><code>%s</code></pre>' % esc(body))
             continue
@@ -371,6 +405,22 @@ code{background:var(--box);border:1px solid var(--line);border-radius:4px;
   padding:1px 5px;font-size:.9em}
 pre.code code{background:none;border:0;padding:0}
 
+/* 인물 문서 인포박스 */
+.ibox{float:right;width:320px;max-width:100%;margin:0 0 18px 24px;
+  border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  background:var(--box);box-shadow:var(--shadow)}
+.ib-title{background:var(--accent);color:#fff;font-weight:700;
+  padding:10px 14px;font-size:15.5px;text-align:center}
+.ibox table{width:100%;border-collapse:collapse;font-size:13.5px}
+.ibox th{width:34%;background:var(--head-bg);border:0;border-bottom:1px solid var(--line);
+  padding:8px 10px;text-align:center;vertical-align:middle;font-weight:600;white-space:nowrap}
+.ibox td{border:0;border-bottom:1px solid var(--line);padding:8px 12px;
+  vertical-align:middle;line-height:1.55}
+.ibox tr:last-child th,.ibox tr:last-child td{border-bottom:0}
+.ibox td.ib-full{text-align:center;background:var(--head-bg);font-weight:600}
+.ibox td.ib-sep{padding:0;height:4px;background:var(--line)}
+@media(max-width:720px){.ibox{float:none;width:100%;margin:0 0 18px}}
+
 details.fold{border:1px solid var(--line);border-radius:6px;margin:14px 0;background:var(--box)}
 details.fold summary{cursor:pointer;padding:9px 14px;font-weight:600;font-size:14.5px}
 .fold-body{padding:2px 14px 12px}
@@ -536,7 +586,7 @@ def build():
         # 분류
         catbar = ""
         if ctx["categories"]:
-            links = " · ".join('<a href="{{ROOT}}c/%s.html">%s</a>' % (slug(c), esc(c))
+            links = " · ".join('<a href="{{ROOT}}%s">%s</a>' % (cat_url(c), esc(c))
                                for c in ctx["categories"])
             catbar = '<div class="catbar">분류: %s</div>' % links
             for c in ctx["categories"]:
@@ -572,7 +622,7 @@ def build():
             f.write(p.replace("{{ROOT}}", "../"))
 
     lis = "".join('<li><a href="%s.html">%s</a> <span style="color:var(--muted)">(%d)</span></li>'
-                  % (slug(c), esc(c), len(m)) for c, m in sorted(CATEGORIES.items()))
+                  % (enc(slug(c)), esc(c), len(m)) for c, m in sorted(CATEGORIES.items()))
     p = page("분류 목록", '<ul class="doclist">%s</ul>' % (lis or "<li>없음</li>"), "../",
              "%d개 분류" % len(CATEGORIES), '<a href="../index.html">문서 목록</a>')
     with open(os.path.join(OUT_DIR, "c", "index.html"), "w", encoding="utf-8") as f:
